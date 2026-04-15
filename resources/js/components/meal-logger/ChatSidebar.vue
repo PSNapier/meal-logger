@@ -69,7 +69,7 @@ function onMessageKeydown(event: KeyboardEvent): void {
 
 <template>
     <div
-        class="flex h-full min-h-0 flex-col border-l border-sidebar-border/70 bg-sidebar/50 dark:border-sidebar-border dark:bg-sidebar/70"
+        class="flex h-full min-h-0 flex-col overflow-hidden border-l border-sidebar-border/70 bg-sidebar/50 dark:border-sidebar-border dark:bg-sidebar/70"
     >
         <div
             class="flex items-start justify-between gap-2 border-b border-sidebar-border/70 px-4 py-3 dark:border-sidebar-border"

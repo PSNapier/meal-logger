@@ -80,6 +80,10 @@ function pickDefaultDate(): string {
 }
 
 const selectedDate = ref(pickDefaultDate());
+const dashboardMainPaneEl = ref<HTMLElement | null>(null);
+const spreadsheetPaneEl = ref<HTMLElement | null>(null);
+const chatSidebarHeight = ref<number | null>(null);
+const chatSidebarTopOffset = ref<number>(0);
 const mealModalOpen = ref(false);
 const page = usePage();
 const userDisplayName = computed(() => {
@@ -102,6 +106,14 @@ const selectedDay = computed(() =>
 
 const sidebarMessages = computed(
     () => selectedDay.value?.daily_log?.chat_messages ?? [],
+);
+const chatSidebarStyle = computed(() =>
+    chatSidebarHeight.value === null
+        ? undefined
+        : {
+              height: `${chatSidebarHeight.value}px`,
+              marginTop: `${chatSidebarTopOffset.value}px`,
+          },
 );
 
 const prevMonth = computed(() => {
@@ -402,6 +414,18 @@ function onSidebarDateChange(newDate: string): void {
 }
 
 let midnightCheckTimer: number | null = null;
+let spreadsheetResizeObserver: ResizeObserver | null = null;
+
+function syncChatSidebarHeight(): void {
+    const spreadsheetHeight = spreadsheetPaneEl.value?.clientHeight ?? null;
+    const mainPaneHeight = dashboardMainPaneEl.value?.clientHeight ?? null;
+
+    chatSidebarHeight.value = spreadsheetHeight;
+    chatSidebarTopOffset.value =
+        spreadsheetHeight !== null && mainPaneHeight !== null
+            ? Math.max(0, mainPaneHeight - spreadsheetHeight)
+            : 0;
+}
 
 onMounted(() => {
     let lastSeenLocalDate = localIsoDate();
@@ -418,12 +442,24 @@ onMounted(() => {
         const [year, month] = today.split('-').map(Number);
         router.visit(dashboard.url({ year, month }));
     }, 60_000);
+
+    syncChatSidebarHeight();
+    window.addEventListener('resize', syncChatSidebarHeight);
+
+    if (spreadsheetPaneEl.value && typeof ResizeObserver !== 'undefined') {
+        spreadsheetResizeObserver = new ResizeObserver(syncChatSidebarHeight);
+        spreadsheetResizeObserver.observe(spreadsheetPaneEl.value);
+    }
 });
 
 onBeforeUnmount(() => {
     if (midnightCheckTimer !== null) {
         window.clearInterval(midnightCheckTimer);
     }
+
+    window.removeEventListener('resize', syncChatSidebarHeight);
+    spreadsheetResizeObserver?.disconnect();
+    spreadsheetResizeObserver = null;
 });
 
 defineOptions({
@@ -444,7 +480,10 @@ defineOptions({
     <div
         class="flex h-[calc(100vh-8rem)] min-h-[480px] flex-1 gap-0 overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
     >
-        <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div
+            ref="dashboardMainPaneEl"
+            class="flex min-w-0 flex-1 flex-col overflow-hidden"
+        >
             <div
                 class="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3"
             >
@@ -493,7 +532,7 @@ defineOptions({
                 </div>
             </div>
 
-            <div class="min-h-0 flex-1 overflow-auto">
+            <div ref="spreadsheetPaneEl" class="min-h-0 flex-1 overflow-auto">
                 <table class="w-full min-w-[900px] border-collapse text-sm">
                     <thead class="sticky top-0 z-10 bg-muted/50">
                         <tr
@@ -677,7 +716,10 @@ defineOptions({
             </div>
         </div>
 
-        <div class="hidden w-[min(100%,380px)] shrink-0 md:flex md:flex-col">
+        <div
+            class="hidden w-[min(100%,380px)] shrink-0 overflow-hidden md:flex md:flex-col"
+            :style="chatSidebarStyle"
+        >
             <ChatSidebar
                 :log-date="selectedDate"
                 :messages="sidebarMessages"
