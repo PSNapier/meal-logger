@@ -39,6 +39,8 @@ class ChatController extends Controller
         ChatMessage::query()->create([
             'user_id' => $user->id,
             'daily_log_id' => $dailyLog->id,
+            'domain' => 'food',
+            'log_date' => $logDate,
             'role' => 'user',
             'content' => $message,
         ]);
@@ -141,6 +143,8 @@ class ChatController extends Controller
             ChatMessage::query()->create([
                 'user_id' => $user->id,
                 'daily_log_id' => $lockedLog->id,
+                'domain' => 'food',
+                'log_date' => $lockedLog->date->toDateString(),
                 'role' => 'assistant',
                 'content' => $assistantContent,
             ]);

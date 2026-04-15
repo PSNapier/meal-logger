@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\DailyLog;
+use App\Models\Measurement;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -25,14 +26,21 @@ class DashboardController extends Controller
             ->get()
             ->keyBy(fn (DailyLog $log) => $log->date->toDateString());
 
+        $measurements = Measurement::query()
+            ->where('user_id', $request->user()->id)
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->get()
+            ->keyBy(fn (Measurement $measurement) => $measurement->date->toDateString());
+
         $days = [];
         for ($cursor = $start->copy(); $cursor->lte($end); $cursor->addDay()) {
             $key = $cursor->toDateString();
             $log = $logs->get($key);
+            $measurement = $measurements->get($key);
             $days[] = [
                 'date' => $key,
                 'day_name' => strtoupper($cursor->format('D')),
-                'daily_log' => $log ? $this->serializeDailyLog($log) : null,
+                'daily_log' => $log ? $this->serializeDailyLog($log, $measurement) : null,
             ];
         }
 
@@ -47,7 +55,7 @@ class DashboardController extends Controller
     /**
      * @return array<string, mixed>
      */
-    private function serializeDailyLog(DailyLog $log): array
+    private function serializeDailyLog(DailyLog $log, ?Measurement $measurement): array
     {
         return [
             'id' => $log->id,
@@ -57,7 +65,10 @@ class DashboardController extends Controller
             'calories' => $log->calories,
             'eating_window_start' => $this->formatTimeColumn($log->getAttributes()['eating_window_start'] ?? null),
             'eating_window_end' => $this->formatTimeColumn($log->getAttributes()['eating_window_end'] ?? null),
-            'weight_lbs' => $log->weight_lbs !== null ? (float) $log->weight_lbs : null,
+            'weight_lbs' => $measurement?->weight_lbs !== null
+                ? (float) $measurement->weight_lbs
+                : ($log->weight_lbs !== null ? (float) $log->weight_lbs : null),
+            'measurement_updated_at' => $measurement?->updated_at?->toIso8601String(),
             'meal_items' => $log->mealItems->map(fn ($m) => [
                 'id' => $m->id,
                 'description' => $m->description,

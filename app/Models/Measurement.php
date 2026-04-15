@@ -8,22 +8,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'user_id',
-    'daily_log_id',
-    'domain',
-    'log_date',
-    'role',
-    'content',
+    'date',
+    'weight_lbs',
 ])]
-class ChatMessage extends Model
+class Measurement extends Model
 {
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function dailyLog(): BelongsTo
-    {
-        return $this->belongsTo(DailyLog::class);
     }
 
     /**
@@ -32,7 +24,8 @@ class ChatMessage extends Model
     protected function casts(): array
     {
         return [
-            'log_date' => 'date',
+            'date' => 'date',
+            'weight_lbs' => 'decimal:1',
         ];
     }
 }

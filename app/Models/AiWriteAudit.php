@@ -8,22 +8,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'user_id',
-    'daily_log_id',
     'domain',
+    'target_type',
+    'target_id',
     'log_date',
-    'role',
-    'content',
+    'before_payload',
+    'after_payload',
+    'prompt',
+    'assistant_summary',
 ])]
-class ChatMessage extends Model
+class AiWriteAudit extends Model
 {
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    public function dailyLog(): BelongsTo
-    {
-        return $this->belongsTo(DailyLog::class);
     }
 
     /**
@@ -33,6 +31,8 @@ class ChatMessage extends Model
     {
         return [
             'log_date' => 'date',
+            'before_payload' => 'array',
+            'after_payload' => 'array',
         ];
     }
 }

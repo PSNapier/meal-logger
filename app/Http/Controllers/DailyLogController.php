@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\UpdateDailyLogRequest;
 use App\Models\DailyLog;
+use App\Models\Measurement;
 use Illuminate\Http\RedirectResponse;
 
 class DailyLogController extends Controller
@@ -24,6 +25,16 @@ class DailyLogController extends Controller
             } elseif (is_numeric($raw)) {
                 $dailyLog->weight_lbs = (float) $raw;
             }
+
+            Measurement::query()->updateOrCreate(
+                [
+                    'user_id' => $dailyLog->user_id,
+                    'date' => $dailyLog->date->toDateString(),
+                ],
+                [
+                    'weight_lbs' => $dailyLog->weight_lbs,
+                ],
+            );
         }
 
         $dailyLog->save();

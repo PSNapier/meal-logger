@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { Head, Link, router, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import ChatSidebar from '@/components/meal-logger/ChatSidebar.vue';
 import type { ChatLine } from '@/components/meal-logger/ChatSidebar.vue';
+import DataGridShell from '@/components/meal-logger/DataGridShell.vue';
 import MealDetailModal from '@/components/meal-logger/MealDetailModal.vue';
 import type { MealItemRow } from '@/components/meal-logger/MealDetailModal.vue';
-import { Button } from '@/components/ui/button';
 import { isValidIsoDate, localIsoDate } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import { update as patchDailyLog } from '@/routes/daily-logs';
+import { upsert as patchMeasurement } from '@/routes/measurements';
 
 type DailyLogPayload = {
     id: number;
@@ -19,6 +20,7 @@ type DailyLogPayload = {
     eating_window_start: string | null;
     eating_window_end: string | null;
     weight_lbs: number | null;
+    measurement_updated_at?: string | null;
     meal_items: MealItemRow[];
     chat_messages: ChatLine[];
 };
@@ -80,10 +82,6 @@ function pickDefaultDate(): string {
 }
 
 const selectedDate = ref(pickDefaultDate());
-const dashboardMainPaneEl = ref<HTMLElement | null>(null);
-const spreadsheetPaneEl = ref<HTMLElement | null>(null);
-const chatSidebarHeight = ref<number | null>(null);
-const chatSidebarTopOffset = ref<number>(0);
 const mealModalOpen = ref(false);
 const page = usePage();
 const userDisplayName = computed(() => {
@@ -106,14 +104,6 @@ const selectedDay = computed(() =>
 
 const sidebarMessages = computed(
     () => selectedDay.value?.daily_log?.chat_messages ?? [],
-);
-const chatSidebarStyle = computed(() =>
-    chatSidebarHeight.value === null
-        ? undefined
-        : {
-              height: `${chatSidebarHeight.value}px`,
-              marginTop: `${chatSidebarTopOffset.value}px`,
-          },
 );
 
 const prevMonth = computed(() => {
@@ -393,9 +383,17 @@ function onTimeChange(
     patchLog(log, { [field]: v });
 }
 
-function onWeightBlur(log: DailyLogPayload, raw: string): void {
+function onWeightBlur(day: DayRow, raw: string): void {
     const t = raw.trim();
-    patchLog(log, { weight_lbs: t === '' ? null : t });
+    router.patch(
+        patchMeasurement.url(),
+        {
+            log_date: day.date,
+            weight_lbs: t === '' ? null : t,
+            expected_updated_at: day.daily_log?.measurement_updated_at ?? null,
+        },
+        { preserveScroll: true },
+    );
 }
 
 function onSidebarDateChange(newDate: string): void {
@@ -414,18 +412,6 @@ function onSidebarDateChange(newDate: string): void {
 }
 
 let midnightCheckTimer: number | null = null;
-let spreadsheetResizeObserver: ResizeObserver | null = null;
-
-function syncChatSidebarHeight(): void {
-    const spreadsheetHeight = spreadsheetPaneEl.value?.clientHeight ?? null;
-    const mainPaneHeight = dashboardMainPaneEl.value?.clientHeight ?? null;
-
-    chatSidebarHeight.value = spreadsheetHeight;
-    chatSidebarTopOffset.value =
-        spreadsheetHeight !== null && mainPaneHeight !== null
-            ? Math.max(0, mainPaneHeight - spreadsheetHeight)
-            : 0;
-}
 
 onMounted(() => {
     let lastSeenLocalDate = localIsoDate();
@@ -442,24 +428,12 @@ onMounted(() => {
         const [year, month] = today.split('-').map(Number);
         router.visit(dashboard.url({ year, month }));
     }, 60_000);
-
-    syncChatSidebarHeight();
-    window.addEventListener('resize', syncChatSidebarHeight);
-
-    if (spreadsheetPaneEl.value && typeof ResizeObserver !== 'undefined') {
-        spreadsheetResizeObserver = new ResizeObserver(syncChatSidebarHeight);
-        spreadsheetResizeObserver.observe(spreadsheetPaneEl.value);
-    }
 });
 
 onBeforeUnmount(() => {
     if (midnightCheckTimer !== null) {
         window.clearInterval(midnightCheckTimer);
     }
-
-    window.removeEventListener('resize', syncChatSidebarHeight);
-    spreadsheetResizeObserver?.disconnect();
-    spreadsheetResizeObserver = null;
 });
 
 defineOptions({
@@ -477,85 +451,63 @@ defineOptions({
 <template>
     <Head title="Meal log" />
 
-    <div
-        class="flex h-[calc(100vh-8rem)] min-h-[480px] flex-1 gap-0 overflow-hidden rounded-xl border border-sidebar-border/70 dark:border-sidebar-border"
+    <DataGridShell
+        title="Nutrition"
+        :month-label="month_label"
+        :prev-href="
+            dashboard.url({
+                year: prevMonth.year,
+                month: prevMonth.month,
+            })
+        "
+        :next-href="
+            dashboard.url({
+                year: nextMonth.year,
+                month: nextMonth.month,
+            })
+        "
     >
-        <div
-            ref="dashboardMainPaneEl"
-            class="flex min-w-0 flex-1 flex-col overflow-hidden"
-        >
-            <div
-                class="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-4 py-3"
-            >
-                <div class="flex items-center gap-2">
-                    <Button variant="outline" size="sm" as-child>
-                        <Link
-                            :href="
-                                dashboard.url({
-                                    year: prevMonth.year,
-                                    month: prevMonth.month,
-                                })
-                            "
-                        >
-                            Prev
-                        </Link>
-                    </Button>
-                    <Button variant="outline" size="sm" as-child>
-                        <Link
-                            :href="
-                                dashboard.url({
-                                    year: nextMonth.year,
-                                    month: nextMonth.month,
-                                })
-                            "
-                        >
-                            Next
-                        </Link>
-                    </Button>
-                    <span class="text-sm font-semibold">{{ month_label }}</span>
-                </div>
-                <div
-                    class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
-                >
-                    <span v-if="averages.waterOz !== null">
-                        Avg water: {{ displayOz(averages.waterOz) }}
-                    </span>
-                    <span v-if="averages.fiberG !== null">
-                        Avg fiber: {{ displayFiber(averages.fiberG) }}
-                    </span>
-                    <span v-if="averages.calories !== null">
-                        Avg cal: {{ displayCalories(averages.calories) }}
-                    </span>
-                    <span v-if="averages.lowestWeight !== null">
-                        Lowest wt: {{ displayWeight(averages.lowestWeight) }}
-                    </span>
-                </div>
+        <template #stats>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span v-if="averages.waterOz !== null">
+                    Avg water: {{ displayOz(averages.waterOz) }}
+                </span>
+                <span v-if="averages.fiberG !== null">
+                    Avg fiber: {{ displayFiber(averages.fiberG) }}
+                </span>
+                <span v-if="averages.calories !== null">
+                    Avg cal: {{ displayCalories(averages.calories) }}
+                </span>
+                <span v-if="averages.lowestWeight !== null">
+                    Lowest wt: {{ displayWeight(averages.lowestWeight) }}
+                </span>
             </div>
+        </template>
 
-            <div ref="spreadsheetPaneEl" class="min-h-0 flex-1 overflow-auto">
-                <table class="w-full min-w-[900px] border-collapse text-sm">
-                    <thead class="sticky top-0 z-10 bg-muted/50">
-                        <tr
-                            class="text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
-                        >
-                            <th class="border-b px-2 py-2">Date</th>
-                            <th class="border-b px-2 py-2">Day</th>
-                            <th class="border-b px-2 py-2">Water</th>
-                            <th class="border-b px-2 py-2">Fiber</th>
-                            <th class="border-b px-2 py-2">Calories</th>
-                            <th class="border-b px-2 py-2">Start</th>
-                            <th class="border-b px-2 py-2">End</th>
-                            <th class="border-b px-2 py-2">Duration</th>
-                            <th class="border-b px-2 py-2">Weight</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr
-                            v-for="day in days"
-                            :key="day.date"
-                            :class="rowClasses(day)"
-                            @click="onRowClick(day)"
-                        >
+        <template #table>
+            <table class="w-full min-w-[900px] border-collapse text-sm">
+                <thead class="sticky top-0 z-10 bg-muted/50">
+                    <tr
+                        class="text-left text-xs font-medium tracking-wide text-muted-foreground uppercase"
+                    >
+                        <th class="border-b px-2 py-2">Date</th>
+                        <th class="border-b px-2 py-2">Day</th>
+                        <th class="border-b px-2 py-2">Water</th>
+                        <th class="border-b px-2 py-2">Fiber</th>
+                        <th class="border-b px-2 py-2">Calories</th>
+                        <th class="border-b px-2 py-2">Start</th>
+                        <th class="border-b px-2 py-2">End</th>
+                        <th class="border-b px-2 py-2">Duration</th>
+                        <th class="border-b px-2 py-2">Weight</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr
+                        v-for="day in days"
+                        :key="day.date"
+                        :class="rowClasses(day)"
+                        @click="onRowClick(day)"
+                    >
                             <td class="px-2 py-1.5 tabular-nums">
                                 {{ day.date.split('-')[2] }}
                             </td>
@@ -703,23 +655,19 @@ defineOptions({
                                     placeholder="n/a"
                                     @blur="
                                         onWeightBlur(
-                                            day.daily_log!,
+                                            day,
                                             ($event.target as HTMLInputElement)
                                                 .value,
                                         )
                                     "
                                 />
                             </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                    </tr>
+                </tbody>
+            </table>
+        </template>
 
-        <div
-            class="hidden w-[min(100%,380px)] shrink-0 overflow-hidden md:flex md:flex-col"
-            :style="chatSidebarStyle"
-        >
+        <template #sidebar>
             <ChatSidebar
                 :log-date="selectedDate"
                 :messages="sidebarMessages"
@@ -727,8 +675,8 @@ defineOptions({
                 :user-name="userDisplayName"
                 @date-change="onSidebarDateChange"
             />
-        </div>
-    </div>
+        </template>
+    </DataGridShell>
 
     <MealDetailModal
         v-model:open="mealModalOpen"
