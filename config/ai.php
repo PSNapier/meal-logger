@@ -120,7 +120,7 @@ return [
             'url' => env('OPENROUTER_URL', 'https://openrouter.ai/api/v1'),
             'models' => [
                 'text' => [
-                    'default' => env('OPENROUTER_MODEL', 'openai/gpt-5.4-nano'),
+                    'default' => env('OPENROUTER_MODEL', 'openai/gpt-4.1-mini'),
                 ],
             ],
         ],

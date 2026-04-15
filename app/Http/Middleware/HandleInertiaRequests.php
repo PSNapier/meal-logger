@@ -43,7 +43,6 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'appDebug' => (bool) config('app.debug'),
-            'foodLibraryAssistant' => fn () => $request->session()->get('foodLibraryAssistant'),
         ];
     }
 }

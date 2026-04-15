@@ -5,13 +5,10 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreChatRequest;
 use App\Models\ChatMessage;
 use App\Models\DailyLog;
-use App\Models\FoodItem;
-use App\Services\FoodLibraryMatcher;
 use App\Services\NutritionLogExtractor;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Log;
 use Throwable;
 
 class ChatController extends Controller
@@ -19,7 +16,6 @@ class ChatController extends Controller
     public function __invoke(
         StoreChatRequest $request,
         NutritionLogExtractor $extractor,
-        FoodLibraryMatcher $matcher,
     ): RedirectResponse {
         $user = $request->user();
         $logDate = $request->validated('log_date');
@@ -47,7 +43,7 @@ class ChatController extends Controller
             'content' => $message,
         ]);
 
-        $dailyLog->load('mealItems.foodItem');
+        $dailyLog->load('mealItems');
 
         $existingDay = null;
         if (
@@ -60,30 +56,22 @@ class ChatController extends Controller
                 'calories' => $dailyLog->calories,
                 'water_oz' => $dailyLog->water_oz !== null ? (float) $dailyLog->water_oz : null,
                 'fiber_g' => $dailyLog->fiber_g !== null ? (float) $dailyLog->fiber_g : null,
-                'meal_items' => $dailyLog->mealItems->map(fn ($m) => [
+                'items' => $dailyLog->mealItems->map(fn ($m) => [
                     'id' => $m->id,
-                    'description' => $m->description,
-                    'food_item_id' => $m->food_item_id ? (int) $m->food_item_id : null,
-                    'quantity' => $m->quantity !== null ? (float) $m->quantity : null,
-                    'unit' => $m->foodItem?->unit,
+                    'description' => (string) $m->description,
+                    'calories' => (int) $m->calories,
+                    'protein_g' => (float) $m->protein_g,
+                    'carbs_g' => (float) $m->carbs_g,
+                    'fat_g' => (float) $m->fat_g,
+                    'sugar_g' => (float) $m->sugar_g,
+                    'fiber_g' => (float) $m->fiber_g,
+                    'water_oz' => (float) $m->water_oz,
                 ])->values()->all(),
             ];
         }
 
-        $confirmedMatches = collect($matcher->match($user, $message))
-            ->filter(fn (array $row) => $row['food_item'] !== null && (float) $row['confidence'] >= 0.8)
-            ->map(fn (array $row) => [
-                'food_item_id' => (int) $row['food_item']->id,
-                'name' => (string) $row['food_item']->name,
-                'unit' => (string) $row['food_item']->unit,
-                'unit_dimension' => (string) $row['food_item']->unit_dimension,
-                'confidence' => (float) $row['confidence'],
-            ])
-            ->values()
-            ->all();
-
         try {
-            $data = $extractor->extract($logDate, $message, $confirmedMatches, $existingDay);
+            $data = $extractor->extract($logDate, $message, $existingDay);
         } catch (Throwable $e) {
             report($e);
 
@@ -104,12 +92,6 @@ class ChatController extends Controller
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            $foodItems = FoodItem::query()
-                ->where('user_id', $user->id)
-                ->whereIn('id', collect($data['meal_items'])->pluck('food_item_id')->filter()->all())
-                ->get()
-                ->keyBy('id');
-
             $lockedLog->mealItems()->delete();
 
             $totals = [
@@ -118,48 +100,34 @@ class ChatController extends Controller
                 'fiber_g' => 0.0,
             ];
 
-            foreach ($data['meal_items'] as $item) {
-                $foodItemId = isset($item['food_item_id']) ? (int) $item['food_item_id'] : null;
-                if (! $foodItemId || ! $foodItems->has($foodItemId)) {
+            foreach ($data['items'] as $item) {
+                $description = trim((string) ($item['description'] ?? ''));
+                if ($description === '') {
                     continue;
                 }
 
-                /** @var FoodItem $foodItem */
-                $foodItem = $foodItems->get($foodItemId);
-                $quantity = max(0.0, (float) ($item['quantity'] ?? 0));
-                $providedUnit = strtolower((string) ($item['unit'] ?? $foodItem->unit));
-                $foodUnit = strtolower((string) $foodItem->unit);
-
-                if ($providedUnit !== '' && $foodUnit !== '' && $providedUnit !== $foodUnit) {
-                    Log::info('Skipped meal item due to unsafe unit conversion request.', [
-                        'user_id' => $user->id,
-                        'daily_log_id' => $lockedLog->id,
-                        'food_item_id' => $foodItemId,
-                        'provided_unit' => $providedUnit,
-                        'stored_unit' => $foodUnit,
-                    ]);
-
-                    continue;
-                }
-
-                $nutrition = $foodItem->nutritionAt($quantity);
+                $calories = (int) ($item['calories'] ?? 0);
+                $proteinG = (float) ($item['protein_g'] ?? 0);
+                $carbsG = (float) ($item['carbs_g'] ?? 0);
+                $fatG = (float) ($item['fat_g'] ?? 0);
+                $sugarG = (float) ($item['sugar_g'] ?? 0);
+                $fiberG = (float) ($item['fiber_g'] ?? 0);
+                $waterOz = (float) ($item['water_oz'] ?? 0);
 
                 $lockedLog->mealItems()->create([
-                    'food_item_id' => $foodItemId,
-                    'description' => (string) ($item['description'] ?? $foodItem->name),
-                    'quantity' => $quantity,
-                    'calories' => $nutrition['calories'],
-                    'protein_g' => $nutrition['protein_g'],
-                    'carbs_g' => $nutrition['carbs_g'],
-                    'fat_g' => $nutrition['fat_g'],
-                    'sugar_g' => $nutrition['sugar_g'],
-                    'fiber_g' => $nutrition['fiber_g'],
-                    'water_oz' => $nutrition['water_oz'],
+                    'description' => $description,
+                    'calories' => $calories,
+                    'protein_g' => $proteinG,
+                    'carbs_g' => $carbsG,
+                    'fat_g' => $fatG,
+                    'sugar_g' => $sugarG,
+                    'fiber_g' => $fiberG,
+                    'water_oz' => $waterOz,
                 ]);
 
-                $totals['calories'] += $nutrition['calories'];
-                $totals['fiber_g'] += $nutrition['fiber_g'];
-                $totals['water_oz'] += $nutrition['water_oz'];
+                $totals['calories'] += $calories;
+                $totals['fiber_g'] += $fiberG;
+                $totals['water_oz'] += $waterOz;
             }
 
             $lockedLog->update([
@@ -168,15 +136,7 @@ class ChatController extends Controller
                 'calories' => (int) $totals['calories'],
             ]);
 
-            $unresolvedItems = collect($data['unresolved_items'] ?? [])
-                ->map(fn (array $row) => trim((string) ($row['description'] ?? '')))
-                ->filter()
-                ->values()
-                ->all();
             $assistantContent = (string) $data['assistant_summary'];
-            if ($unresolvedItems !== []) {
-                $assistantContent .= "\n\nUnresolved items:\n- ".implode("\n- ", $unresolvedItems);
-            }
 
             ChatMessage::query()->create([
                 'user_id' => $user->id,

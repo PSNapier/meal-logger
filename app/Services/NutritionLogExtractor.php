@@ -16,34 +16,42 @@ class NutritionLogExtractor
      *     calories: int|null,
      *     water_oz: float|null,
      *     fiber_g: float|null,
-     *     meal_items: list<array{id:int,description:string,food_item_id:int|null,quantity:float|null,unit:string|null}>
+     *     items: list<array{
+     *         id:int,
+     *         description:string,
+     *         calories:int,
+     *         protein_g:float,
+     *         carbs_g:float,
+     *         fat_g:float,
+     *         sugar_g:float,
+     *         fiber_g:float,
+     *         water_oz:float
+     *     }>
      * }|null  $existingDay
-     * @param  list<array{food_item_id:int,name:string,unit:string,unit_dimension:string,confidence:float}>  $confirmedMatches
      * @return array{
      *     log_date: string,
      *     calories: int,
      *     water_oz: float,
      *     fiber_g: float,
-     *     meal_items: list<array{
+     *     items: list<array{
      *         description: string,
-     *         food_item_id: int|null,
-     *         quantity: float|null,
-     *         unit: string|null,
-     *     }>,
-     *     unresolved_items: list<array{
-     *         description: string,
-     *         quantity: float|null,
-     *         unit: string|null
+     *         calories: int,
+     *         protein_g: float,
+     *         carbs_g: float,
+     *         fat_g: float,
+     *         sugar_g: float,
+     *         fiber_g: float,
+     *         water_oz: float
      *     }>,
      *     assistant_summary: string
      * }
      */
-    public function extract(string $targetDateYmd, string $userContent, array $confirmedMatches = [], ?array $existingDay = null): array
+    public function extract(string $targetDateYmd, string $userContent, ?array $existingDay = null): array
     {
         $mergeFromPriorLog = $existingDay !== null;
 
         $nutritionAgent = agent(
-            instructions: NutritionPrompt::instructions($targetDateYmd, $mergeFromPriorLog, $confirmedMatches !== []),
+            instructions: NutritionPrompt::instructions($targetDateYmd, $mergeFromPriorLog),
             messages: [],
             tools: [],
             schema: fn (JsonSchema $schema) => [
@@ -51,23 +59,17 @@ class NutritionLogExtractor
                 'calories' => $schema->integer()->required(),
                 'water_oz' => $schema->number()->required(),
                 'fiber_g' => $schema->number()->required(),
-                'meal_items' => $schema->array()
+                'items' => $schema->array()
                     ->items(
                         $schema->object([
                             'description' => $schema->string()->required(),
-                            'food_item_id' => $schema->integer()->nullable(),
-                            'quantity' => $schema->number()->nullable(),
-                            'unit' => $schema->string()->nullable(),
-                        ])
-                    )
-                    ->min(0)
-                    ->required(),
-                'unresolved_items' => $schema->array()
-                    ->items(
-                        $schema->object([
-                            'description' => $schema->string()->required(),
-                            'quantity' => $schema->number()->nullable(),
-                            'unit' => $schema->string()->nullable(),
+                            'calories' => $schema->integer()->required(),
+                            'protein_g' => $schema->number()->required(),
+                            'carbs_g' => $schema->number()->required(),
+                            'fat_g' => $schema->number()->required(),
+                            'sugar_g' => $schema->number()->required(),
+                            'fiber_g' => $schema->number()->required(),
+                            'water_oz' => $schema->number()->required(),
                         ])
                     )
                     ->min(0)
@@ -78,12 +80,7 @@ class NutritionLogExtractor
 
         $model = config('ai.providers.openrouter.models.text.default');
 
-        $userPrompt = '';
-        if ($confirmedMatches !== []) {
-            $userPrompt .= "Trusted food-library matches (JSON):\n".json_encode($confirmedMatches, JSON_THROW_ON_ERROR)."\n\n";
-        }
-
-        $userPrompt .= $mergeFromPriorLog
+        $userPrompt = $mergeFromPriorLog
             ? "Current saved log (JSON):\n".json_encode($existingDay, JSON_THROW_ON_ERROR)
                 ."\n\nUser update (merge into this day):\n".$userContent
             : "Food log:\n\n".$userContent;
@@ -106,8 +103,7 @@ class NutritionLogExtractor
             'calories' => (int) $data['calories'],
             'water_oz' => (float) $data['water_oz'],
             'fiber_g' => (float) $data['fiber_g'],
-            'meal_items' => array_values($data['meal_items'] ?? []),
-            'unresolved_items' => array_values($data['unresolved_items'] ?? []),
+            'items' => array_values($data['items'] ?? []),
             'assistant_summary' => (string) ($data['assistant_summary'] ?? ''),
         ];
     }
