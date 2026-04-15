@@ -8,7 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
     'daily_log_id',
+    'food_item_id',
     'description',
+    'quantity',
     'calories',
     'protein_g',
     'carbs_g',
@@ -24,6 +26,11 @@ class MealItem extends Model
         return $this->belongsTo(DailyLog::class);
     }
 
+    public function foodItem(): BelongsTo
+    {
+        return $this->belongsTo(FoodItem::class);
+    }
+
     /**
      * @return array<string, string>
      */
@@ -31,6 +38,7 @@ class MealItem extends Model
     {
         return [
             'calories' => 'integer',
+            'quantity' => 'decimal:3',
             'protein_g' => 'decimal:2',
             'carbs_g' => 'decimal:2',
             'fat_g' => 'decimal:2',

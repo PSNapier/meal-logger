@@ -29,6 +29,11 @@ class User extends Authenticatable
         return $this->hasMany(ChatMessage::class);
     }
 
+    public function foodItems(): HasMany
+    {
+        return $this->hasMany(FoodItem::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

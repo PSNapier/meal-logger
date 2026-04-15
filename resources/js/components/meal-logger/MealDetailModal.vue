@@ -9,7 +9,9 @@ import {
 
 export type MealItemRow = {
     id: number;
+    food_item_id?: number | null;
     description: string;
+    quantity?: number | null;
     calories: number;
     protein_g: number;
     carbs_g: number;

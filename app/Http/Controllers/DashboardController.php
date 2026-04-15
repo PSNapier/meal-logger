@@ -60,7 +60,9 @@ class DashboardController extends Controller
             'weight_lbs' => $log->weight_lbs !== null ? (float) $log->weight_lbs : null,
             'meal_items' => $log->mealItems->map(fn ($m) => [
                 'id' => $m->id,
+                'food_item_id' => $m->food_item_id ? (int) $m->food_item_id : null,
                 'description' => $m->description,
+                'quantity' => $m->quantity !== null ? (float) $m->quantity : null,
                 'calories' => (int) $m->calories,
                 'protein_g' => (float) $m->protein_g,
                 'carbs_g' => (float) $m->carbs_g,

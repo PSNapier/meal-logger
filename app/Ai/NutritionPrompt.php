@@ -4,7 +4,7 @@ namespace App\Ai;
 
 final class NutritionPrompt
 {
-    public static function instructions(string $targetDate, bool $mergeFromPriorLog): string
+    public static function instructions(string $targetDate, bool $mergeFromPriorLog, bool $hasConfirmedMatches): string
     {
         $mergeBlock = $mergeFromPriorLog ? <<<'TXT'
 
@@ -26,11 +26,29 @@ FIRST entry mode (no prior snapshot, or empty day):
 
 TXT;
 
+        $matchBlock = $hasConfirmedMatches ? <<<'TXT'
+
+Food library match mode:
+- Some entries may be marked as trusted matches (by food_item_id).
+- For trusted matches, do not research nutrition and do not output macro estimates yourself.
+- Return the matched food_item_id plus consumed quantity and unit.
+- If you cannot confidently map a line item to a trusted id, put it in unresolved_items.
+
+TXT
+            : <<<'TXT'
+
+Food library mode:
+- If there is no trusted match for an item, place it in unresolved_items.
+- Do not invent nutrition values for unresolved items.
+
+TXT;
+
         return <<<TXT
 You are a nutrition tracker. Estimate calories, macros, sugar, fiber, and hydration from the user's food log for ONE calendar day.
 
 Target date (Y-m-d) for this extraction — you MUST set log_date to exactly: {$targetDate}
 {$mergeBlock}
+{$matchBlock}
 For each food or drink line item that should exist for the day after your update, produce one meal_items row with realistic estimates.
 
 Guidelines:
@@ -42,8 +60,10 @@ Guidelines:
 
 Structured output rules:
 - log_date must be "{$targetDate}".
-- calories is total kcal for the day (integer). water_oz is total hydration oz for the day (number). fiber_g is total dietary fiber in grams for the day (number).
-- meal_items: one row per distinct food/drink line that remains for the day; combine components only when they clearly belong to one dish. meal_items may be empty only if the user explicitly cleared the entire day.
+- meal_items: include only trusted food-library-backed rows with fields: description, food_item_id, quantity, unit.
+- unresolved_items: include rows that could not be mapped safely, each with description, quantity, and unit.
+- assistant_summary must mention unresolved items clearly so user can add/fix them in My Foods.
+- calories, water_oz, and fiber_g should be estimated from meal_items only (trusted rows only).
 - assistant_summary: markdown for the user ONLY in this layout (no tables, no other headings):
   # Daily Totals
   Calories: <n> kcal

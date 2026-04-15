@@ -1,0 +1,21 @@
+---
+description: "Always-on stack and environment defaults"
+alwaysApply: true
+---
+
+Project stack defaults:
+- Laravel 13
+- Vue
+- Tailwind CSS
+- MySQL
+- Laravel AI SDK
+- OpenRouter
+
+Environment defaults:
+- Local development runs on Windows 11 with Cursor and Laravel Herd.
+- When proposing or running terminal commands for local development, use PowerShell-compatible syntax.
+- Production targets Laravel Forge on Linux VPS environments.
+
+Cross-environment guidance:
+- Prefer commands and paths that are explicit about OS differences when relevant.
+- Call out Linux-vs-Windows differences early for deploy/runtime tasks (path separators, shell syntax, process management, permissions, case sensitivity).
