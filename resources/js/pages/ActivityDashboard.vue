@@ -108,18 +108,27 @@ const nextMonth = computed(() => {
     return { year: d.getFullYear(), month: d.getMonth() + 1 };
 });
 
-const totals = computed(() => {
+const averages = computed(() => {
     const logs = props.days
         .map((d) => d.activity_log)
         .filter(Boolean) as ActivityLog[];
     const sum = (key: keyof ActivityLog) =>
         logs.reduce((n, row) => n + Number(row[key]), 0);
+    const dayCount = Math.max(props.days.length, 1);
+
     return {
-        sessions: sum('total_sessions'),
-        minutes: sum('total_minutes'),
-        calories: sum('calories_burned'),
+        sessions: sum('total_sessions') / dayCount,
+        minutes: sum('total_minutes') / dayCount,
+        calories: sum('calories_burned') / dayCount,
     };
 });
+
+function formatAverage(value: number): string {
+    return value.toLocaleString(undefined, {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+    });
+}
 
 function onSidebarDateChange(newDate: string): void {
     if (!isValidIsoDate(newDate)) return;
@@ -176,9 +185,9 @@ defineOptions({
             <div
                 class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground"
             >
-                <span>Total sessions: {{ totals.sessions }}</span>
-                <span>Total minutes: {{ totals.minutes }}</span>
-                <span>Total kcal: {{ totals.calories }}</span>
+                <span>Avg sessions/day: {{ formatAverage(averages.sessions) }}</span>
+                <span>Avg minutes/day: {{ formatAverage(averages.minutes) }}</span>
+                <span>Avg kcal/day: {{ formatAverage(averages.calories) }}</span>
             </div>
         </template>
 
