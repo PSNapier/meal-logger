@@ -5,6 +5,7 @@ import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { assistantMarkdownToHtml } from '@/lib/assistantMarkdown';
 import { localIsoDate } from '@/lib/utils';
 import { resetDay as debugResetDay } from '@/routes/debug';
 
@@ -44,6 +45,14 @@ const serverMessageError = computed(
     () => (page.props.errors as Record<string, string>).message,
 );
 const messagesNewestFirst = computed(() => [...props.messages].reverse());
+
+const messagesForDisplay = computed(() =>
+    messagesNewestFirst.value.map((m) =>
+        m.role === 'assistant'
+            ? { ...m, html: assistantMarkdownToHtml(m.content) }
+            : { ...m, html: undefined as string | undefined },
+    ),
+);
 const todayIso = computed(() => localIsoDate());
 
 function confirmDebugReset(): boolean {
@@ -171,7 +180,7 @@ function onMessageKeydown(event: KeyboardEvent): void {
                 {{ emptyStateText }}
             </div>
             <div
-                v-for="m in messagesNewestFirst"
+                v-for="m in messagesForDisplay"
                 :key="m.id"
                 class="text-sm"
                 :class="
@@ -186,10 +195,91 @@ function onMessageKeydown(event: KeyboardEvent): void {
                 >
                     {{ props.userName ?? 'User' }}
                 </p>
-                <div class="whitespace-pre-wrap break-words">
+                <div
+                    v-if="m.html !== undefined"
+                    class="chat-markdown max-w-full overflow-x-auto break-words"
+                    v-html="m.html"
+                />
+                <div v-else class="whitespace-pre-wrap break-words">
                     {{ m.content }}
                 </div>
             </div>
         </div>
     </div>
 </template>
+
+<style scoped>
+.chat-markdown :deep(p) {
+    margin-bottom: 0.5rem;
+}
+.chat-markdown :deep(p:last-child) {
+    margin-bottom: 0;
+}
+.chat-markdown :deep(ul),
+.chat-markdown :deep(ol) {
+    margin: 0.5rem 0;
+    padding-left: 1.25rem;
+}
+.chat-markdown :deep(ul) {
+    list-style-type: disc;
+}
+.chat-markdown :deep(ol) {
+    list-style-type: decimal;
+}
+.chat-markdown :deep(li) {
+    margin: 0.125rem 0;
+}
+.chat-markdown :deep(h1),
+.chat-markdown :deep(h2),
+.chat-markdown :deep(h3) {
+    font-weight: 600;
+    margin-top: 0.75rem;
+    margin-bottom: 0.35rem;
+}
+.chat-markdown :deep(h1) {
+    font-size: 1rem;
+}
+.chat-markdown :deep(pre) {
+    overflow-x: auto;
+    border-radius: 0.375rem;
+    background: var(--muted);
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+    margin: 0.5rem 0;
+}
+.chat-markdown :deep(code) {
+    font-size: 0.8125rem;
+    border-radius: 0.25rem;
+    background: var(--muted);
+    padding: 0.1rem 0.35rem;
+}
+.chat-markdown :deep(pre code) {
+    padding: 0;
+    background: transparent;
+}
+.chat-markdown :deep(blockquote) {
+    border-left: 2px solid var(--border);
+    padding-left: 0.75rem;
+    margin: 0.5rem 0;
+    color: var(--muted-foreground);
+}
+.chat-markdown :deep(a) {
+    color: var(--primary);
+    text-decoration: underline;
+}
+.chat-markdown :deep(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8125rem;
+    margin: 0.5rem 0;
+}
+.chat-markdown :deep(th),
+.chat-markdown :deep(td) {
+    border: 1px solid var(--border);
+    padding: 0.25rem 0.5rem;
+}
+.chat-markdown :deep(hr) {
+    margin: 0.75rem 0;
+    border-color: var(--border);
+}
+</style>
