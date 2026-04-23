@@ -9,6 +9,7 @@ use App\Services\NutritionLogExtractor;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Laravel\Ai\Exceptions\AiException;
 use Throwable;
 
 class ChatController extends Controller
@@ -77,8 +78,13 @@ class ChatController extends Controller
         } catch (Throwable $e) {
             report($e);
 
+            $flash = 'Could not reach the nutrition model. Check API keys and try again.';
+            if ($e instanceof AiException && str_contains($e->getMessage(), 'OpenRouter Authentication')) {
+                $flash = 'OpenRouter rejected your API key. Create a new key at https://openrouter.ai/keys , set OPENROUTER_API_KEY in .env, then run php artisan config:clear.';
+            }
+
             return back()->withErrors([
-                'message' => 'Could not reach the nutrition model. Check API keys and try again.',
+                'message' => $flash,
             ]);
         }
 

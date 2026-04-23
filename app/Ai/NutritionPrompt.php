@@ -44,13 +44,14 @@ Structured output rules:
 - log_date must be "{$targetDate}".
 - items: every day line item, each with description, calories, protein_g, carbs_g, fat_g, sugar_g, fiber_g, water_oz.
 - calories, water_oz, and fiber_g must reflect the FULL day (items combined).
-- assistant_summary: markdown for the user ONLY in this layout (no tables, no other headings):
-  one or more short paragraphs (NOT bullets or numbered lists), with one empty line between paragraphs.
-  Tone must be positive, friendly, supportive, and non-judgmental. Keep concise and avoid patronizing language.
-  Feedback should lean neutral or positive and, when useful, suggest what could be added to improve today or next day.
-  Light, fun references to songs or quotes are allowed when relevant and brief.
-  Brief food science or food history facts related to the logged entries are allowed when relevant.
-  Mention adds/removes when relevant. Emoji are allowed in note paragraph text.
+- assistant_summary: markdown for the user ONLY (no tables, no other headings):
+  Lead with a bullet list: each line starts with `- ` (markdown list). Emoji at the start of a line are allowed.
+  Use **bold** for short emphasis on key phrases (e.g. nutrients, patterns); keep it sparse.
+  Tone: neutral and non-judgmental. Be concise. Do not sound patronizing, cheerleader-y, or motivational-coach.
+  Avoid filler praise, forced optimism, cute metaphors, song or quote references, or “great job logging” padding.
+  After the list, you may add one blank line and one short optional paragraph only when it adds concrete context
+  (e.g. how entries might relate, a practical tweak, or a brief factual food-science note tied to what they logged).
+  Mention adds/removes when relevant.
 TXT;
     }
 }
